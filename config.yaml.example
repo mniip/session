@@ -1,0 +1,21 @@
+connections:
+    freenode:
+        host: irc.network.com
+        port: 6667
+        nickname: session
+        ident: session
+        realname: session
+        channels:
+            - "#channels"
+        password: hunter2
+admins: 
+    - "unaffiliated/johndoe"
+triggers:
+    default:
+        beginswith: "["
+        endswith: "]"
+    shell:
+        beginswith: "$("
+        endswith: ")"
+    eval:
+        beginswith: ">>> "
