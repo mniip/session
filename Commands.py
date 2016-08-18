@@ -15,11 +15,9 @@ def welcome(self, msg):
 
 commands = {}
 
-def command(cmd, trigger = "default"):
+def command(cmd):
     def decorator(fun):
-        if trigger not in commands:
-            commands[trigger] = {}
-        commands[trigger][cmd] = fun
+        commands[cmd] = fun
         return fun
     return decorator
 
@@ -54,40 +52,39 @@ class Request:
 def privmsg(self, msg):
     query = msg.arguments[1].decode("utf_8", "replace")
     for trigger, conf in Config.config["triggers"].items():
-        if trigger in commands:
-            text = query
-            if "beginswith" in conf:
-                expected = conf["beginswith"]
-                prefix = text[:len(expected)]
-                text = text[len(expected):]
-                if prefix != expected:
-                    continue
-            if "endswith" in conf:
-                expected = conf["endswith"]
-                suffix = text[-len(expected):]
-                text = text[:-len(expected)]
-                if suffix != expected:
-                    continue
-            if None in commands[trigger]:
-                command = None
-                args = text.split(" ")
-            else:
-                command, *args = text.split(" ")
-                if command not in commands[trigger]:
-                    continue
-            if msg.arguments[0] == self.nickname:
-                context = msg.source.nick
-            else:
-                context = msg.arguments[0]
-            request = Request(self, context, msg, command, args)
-            try:
-                commands[trigger][command](request)
-            except Exception:
-                type, value, tb = sys.exc_info()
-                err = traceback.format_exception(type, value, tb)
-                del tb
-                request.say(b" ".join(Irc.encode(e.rstrip("\n")) for e in err))
-            break
+        text = query
+        if "beginswith" in conf:
+            expected = conf["beginswith"]
+            prefix = text[:len(expected)]
+            text = text[len(expected):]
+            if prefix != expected:
+                continue
+        if "endswith" in conf:
+            expected = conf["endswith"]
+            suffix = text[-len(expected):]
+            text = text[:-len(expected)]
+            if suffix != expected:
+                continue
+        if "command" in conf:
+            command = conf["command"]
+            args = text.split(" ")
+        else:
+            command, *args = text.split(" ")
+        if command not in commands:
+            continue
+        if msg.arguments[0] == self.nickname:
+            context = msg.source.nick
+        else:
+            context = msg.arguments[0]
+        request = Request(self, context, msg, command, args)
+        try:
+            commands[command](request)
+        except Exception:
+            type, value, tb = sys.exc_info()
+            err = traceback.format_exception(type, value, tb)
+            del tb
+            request.say(b" ".join(Irc.encode(e.rstrip("\n")) for e in err))
+        break
 
 @command("echo")
 def echo(request):
@@ -108,7 +105,6 @@ def reload(request):
         imp.reload(sys.modules[module])
     request.reply("Done")
 
-@command(None, trigger = "eval")
 @command("eval")
 @admin_only
 def eval_(request):
@@ -124,7 +120,6 @@ def eval_(request):
 def raw(request):
     request.conn.raw_write(Irc.encode(" ".join(request.args)) + b"\r\n")
 
-@command(None, trigger = "shell")
 @command("shell")
 @admin_only
 def shell(request):
@@ -181,14 +176,17 @@ def shell(request):
 @command("list")
 def list_(request):
     cmds = {}
+    for cmd, fun in commands.items():
+        fun = id(fun)
+        if fun not in cmds:
+            cmds[fun] = []
+        cmds[fun].append(cmd)
     for trigger, conf in Config.config["triggers"].items():
-        if trigger in commands:
-            for cmd, fun in commands[trigger].items():
-                fun = id(fun)
-                if fun not in cmds:
-                    cmds[fun] = []
-                cmds[fun].append(conf.get("beginswith", "") + (cmd if cmd != None else "\x02...\x02") + conf.get("endswith", ""))
-    request.reply(", ".join(" \x02/\x02 ".join(trigs) for trigs in cmds.values()))
+        if "command" in conf:
+            if conf["command"] in commands:
+                fun = id(commands[conf["command"]])
+                cmds[fun].append(conf.get("beginswith", "") + "\x02...\x02" + conf.get("endswith", ""))
+    request.reply(", ".join(sorted(" \x02/\x02 ".join(names) for names in cmds.values())))
 
 @command("message")
 def message(request):

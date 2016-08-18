@@ -17,5 +17,7 @@ triggers:
     shell:
         beginswith: "$("
         endswith: ")"
+        command: shell
     eval:
         beginswith: ">>> "
+        command: eval
